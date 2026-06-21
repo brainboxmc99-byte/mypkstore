@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
+import { LandingPage } from "@/pages/landing";
 import { AdminLogin } from "@/pages/admin-login";
 import { AdminDashboard } from "@/pages/admin-dashboard";
 import { ShopLogin } from "@/pages/shop-login";
@@ -15,7 +16,8 @@ const queryClient = new QueryClient();
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={AdminLogin} />
+      <Route path="/" component={LandingPage} />
+      <Route path="/admin-login" component={AdminLogin} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/login" component={ShopLogin} />
       <Route path="/dashboard" component={ShopDashboard} />

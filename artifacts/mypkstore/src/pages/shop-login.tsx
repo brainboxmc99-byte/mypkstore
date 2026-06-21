@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useLoginWithToken, useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -10,6 +10,7 @@ export function ShopLogin() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isProcessing, setIsProcessing] = useState(false);
+  const tokenAttempted = useRef(false);
 
   const { data: user, isLoading: isUserLoading } = useGetMe({
     query: { queryKey: getGetMeQueryKey(), retry: false }
@@ -42,11 +43,12 @@ export function ShopLogin() {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
 
-    if (token && !isUserLoading && !isProcessing && !loginMutation.isPending) {
+    if (token && !isUserLoading && !tokenAttempted.current) {
+      tokenAttempted.current = true;
       setIsProcessing(true);
       loginMutation.mutate({ data: { token } });
     }
-  }, [user, isUserLoading, setLocation, loginMutation, isProcessing]);
+  }, [user, isUserLoading, setLocation]);
 
   if (isUserLoading || isProcessing) return <div className="min-h-screen flex items-center justify-center bg-background">Loading...</div>;
 

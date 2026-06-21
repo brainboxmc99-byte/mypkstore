@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, gte } from "drizzle-orm";
 import crypto from "crypto";
-import { db, shopsTable, plansTable, loginTokensTable, ordersTable } from "@workspace/db";
+import { db, shopsTable, plansTable, loginTokensTable, ordersTable, platformSettingsTable } from "@workspace/db";
 import {
   GetAdminStatsResponse,
   ListAdminShopsResponse,
@@ -12,10 +12,14 @@ import {
   DeleteShopParams,
   GenerateTokenParams,
   GenerateTokenResponse,
+  GeneratePermanentTokenParams,
+  GeneratePermanentTokenResponse,
   ListPlansResponse,
   UpdatePlanParams,
   UpdatePlanBody,
   UpdatePlanResponse,
+  GetAdminSettingsResponse,
+  UpdateAdminSettingsBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -76,7 +80,12 @@ router.get("/admin/shops", requireAdmin, async (req, res): Promise<void> => {
 
   res.json(
     ListAdminShopsResponse.parse(
-      shops.map((s) => ({ ...s, createdAt: s.createdAt.toISOString() })),
+      shops.map((s) => ({
+        ...s,
+        createdAt: s.createdAt.toISOString(),
+        subscriptionStartDate: s.subscriptionStartDate?.toISOString() ?? null,
+        subscriptionExpiryDate: s.subscriptionExpiryDate?.toISOString() ?? null,
+      })),
     ),
   );
 });
@@ -126,8 +135,17 @@ router.patch("/admin/shops/:id", requireAdmin, async (req, res): Promise<void> =
   }
 
   const updates: Record<string, unknown> = {};
+  if (parsed.data.shopName !== undefined) updates.shopName = parsed.data.shopName;
+  if (parsed.data.ownerName !== undefined) updates.ownerName = parsed.data.ownerName;
+  if (parsed.data.whatsapp !== undefined) updates.whatsapp = parsed.data.whatsapp;
   if (parsed.data.plan !== undefined) updates.plan = parsed.data.plan;
   if (parsed.data.status !== undefined) updates.status = parsed.data.status;
+  if (parsed.data.subscriptionStartDate !== undefined)
+    updates.subscriptionStartDate = parsed.data.subscriptionStartDate ? new Date(parsed.data.subscriptionStartDate) : null;
+  if (parsed.data.subscriptionExpiryDate !== undefined)
+    updates.subscriptionExpiryDate = parsed.data.subscriptionExpiryDate ? new Date(parsed.data.subscriptionExpiryDate) : null;
+  if (parsed.data.showOnLanding !== undefined) updates.showOnLanding = parsed.data.showOnLanding;
+  if (parsed.data.heroFeatured !== undefined) updates.heroFeatured = parsed.data.heroFeatured;
 
   if (Object.keys(updates).length === 0) {
     const [shop] = await db
@@ -138,10 +156,14 @@ router.patch("/admin/shops/:id", requireAdmin, async (req, res): Promise<void> =
       res.status(404).json({ error: "Shop not found" });
       return;
     }
-    res.json(UpdateShopResponse.parse({ ...shop, createdAt: shop.createdAt.toISOString() }));
+    res.json(UpdateShopResponse.parse({ ...shop, createdAt: shop.createdAt.toISOString(), subscriptionStartDate: shop.subscriptionStartDate?.toISOString() ?? null, subscriptionExpiryDate: shop.subscriptionExpiryDate?.toISOString() ?? null }));
     return;
   }
 
+  // Only one hero store allowed: if turning this one ON, turn all others OFF first
+  if (updates.heroFeatured === true) {
+    await db.update(shopsTable).set({ heroFeatured: false });
+  }
   const [shop] = await db
     .update(shopsTable)
     .set(updates)
@@ -153,7 +175,7 @@ router.patch("/admin/shops/:id", requireAdmin, async (req, res): Promise<void> =
     return;
   }
 
-  res.json(UpdateShopResponse.parse({ ...shop, createdAt: shop.createdAt.toISOString() }));
+  res.json(UpdateShopResponse.parse({ ...shop, createdAt: shop.createdAt.toISOString(), subscriptionStartDate: shop.subscriptionStartDate?.toISOString() ?? null, subscriptionExpiryDate: shop.subscriptionExpiryDate?.toISOString() ?? null }));
 });
 
 router.delete("/admin/shops/:id", requireAdmin, async (req, res): Promise<void> => {
@@ -206,6 +228,151 @@ router.post("/admin/shops/:id/token", requireAdmin, async (req, res): Promise<vo
   );
 });
 
+router.post("/admin/shops/:id/permanent-token", requireAdmin, async (req, res): Promise<void> => {
+  const params = GeneratePermanentTokenParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [shop] = await db
+    .select()
+    .from(shopsTable)
+    .where(eq(shopsTable.id, params.data.id));
+
+  if (!shop) {
+    res.status(404).json({ error: "Shop not found" });
+    return;
+  }
+
+  let token = shop.permanentToken;
+  if (!token) {
+    token = crypto.randomBytes(32).toString("hex");
+    await db
+      .update(shopsTable)
+      .set({ permanentToken: token })
+      .where(eq(shopsTable.id, shop.id));
+  }
+
+  const domain = process.env.APP_DOMAIN ?? process.env.REPLIT_DEV_DOMAIN ?? "localhost";
+  const permanentLink = `https://${domain}/login?token=${token}`;
+
+  res.json(
+    GeneratePermanentTokenResponse.parse({
+      token,
+      shopId: shop.id,
+      permanentLink,
+    }),
+  );
+});
+
+router.get("/admin/settings", requireAdmin, async (req, res): Promise<void> => {
+  const rows = await db.select().from(platformSettingsTable);
+  const map: Record<string, string> = {};
+  for (const r of rows) map[r.key] = r.value;
+  res.json(GetAdminSettingsResponse.parse({
+    whatsappNumber: map["whatsappNumber"] ?? "",
+    contactEmail: map["contactEmail"] ?? null,
+    contactAddress: map["contactAddress"] ?? null,
+    contactPhone: map["contactPhone"] ?? null,
+    privacyPolicy: map["privacyPolicy"] ?? null,
+    shippingPolicy: map["shippingPolicy"] ?? null,
+    returnPolicy: map["returnPolicy"] ?? null,
+    facebookUrl: map["facebookUrl"] ?? null,
+    instagramUrl: map["instagramUrl"] ?? null,
+    twitterUrl: map["twitterUrl"] ?? null,
+    youtubeUrl: map["youtubeUrl"] ?? null,
+    paymentMethods: map["paymentMethods"] ?? null,
+  }));
+});
+
+router.patch("/admin/settings", requireAdmin, async (req, res): Promise<void> => {
+  const parsed = UpdateAdminSettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const updates: Array<{ key: string; value: string }> = [];
+  if (parsed.data.whatsappNumber !== undefined)
+    updates.push({ key: "whatsappNumber", value: parsed.data.whatsappNumber });
+  if (parsed.data.contactEmail !== undefined)
+    updates.push({ key: "contactEmail", value: parsed.data.contactEmail });
+  if (parsed.data.contactAddress !== undefined)
+    updates.push({ key: "contactAddress", value: parsed.data.contactAddress });
+  if (parsed.data.contactPhone !== undefined)
+    updates.push({ key: "contactPhone", value: parsed.data.contactPhone });
+  if (parsed.data.privacyPolicy !== undefined)
+    updates.push({ key: "privacyPolicy", value: parsed.data.privacyPolicy });
+  if (parsed.data.shippingPolicy !== undefined)
+    updates.push({ key: "shippingPolicy", value: parsed.data.shippingPolicy });
+  if (parsed.data.returnPolicy !== undefined)
+    updates.push({ key: "returnPolicy", value: parsed.data.returnPolicy });
+  if (parsed.data.facebookUrl !== undefined)
+    updates.push({ key: "facebookUrl", value: parsed.data.facebookUrl });
+  if (parsed.data.instagramUrl !== undefined)
+    updates.push({ key: "instagramUrl", value: parsed.data.instagramUrl });
+  if (parsed.data.twitterUrl !== undefined)
+    updates.push({ key: "twitterUrl", value: parsed.data.twitterUrl });
+  if (parsed.data.youtubeUrl !== undefined)
+    updates.push({ key: "youtubeUrl", value: parsed.data.youtubeUrl });
+  if (parsed.data.paymentMethods !== undefined)
+    updates.push({ key: "paymentMethods", value: parsed.data.paymentMethods });
+
+  for (const u of updates) {
+    await db
+      .insert(platformSettingsTable)
+      .values({ key: u.key, value: u.value })
+      .onConflictDoUpdate({ target: platformSettingsTable.key, set: { value: u.value } });
+  }
+
+  const rows = await db.select().from(platformSettingsTable);
+  const map: Record<string, string> = {};
+  for (const r of rows) map[r.key] = r.value;
+  res.json(GetAdminSettingsResponse.parse({
+    whatsappNumber: map["whatsappNumber"] ?? "",
+    contactEmail: map["contactEmail"] ?? null,
+    contactAddress: map["contactAddress"] ?? null,
+    contactPhone: map["contactPhone"] ?? null,
+    privacyPolicy: map["privacyPolicy"] ?? null,
+    shippingPolicy: map["shippingPolicy"] ?? null,
+    returnPolicy: map["returnPolicy"] ?? null,
+    facebookUrl: map["facebookUrl"] ?? null,
+    instagramUrl: map["instagramUrl"] ?? null,
+    twitterUrl: map["twitterUrl"] ?? null,
+    youtubeUrl: map["youtubeUrl"] ?? null,
+    paymentMethods: map["paymentMethods"] ?? null,
+  }));
+});
+
+router.post("/admin/change-password", requireAdmin, async (req, res): Promise<void> => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({ error: "currentPassword and newPassword are required" });
+    return;
+  }
+  if (newPassword.length < 6) {
+    res.status(400).json({ error: "New password must be at least 6 characters" });
+    return;
+  }
+
+  const rows = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "adminPassword"));
+  const storedPassword = rows[0]?.value;
+  const ADMIN_PASSWORD_ENV = process.env.ADMIN_PASSWORD ?? "admin123";
+  const effectivePassword = storedPassword || ADMIN_PASSWORD_ENV;
+
+  if (currentPassword !== effectivePassword) {
+    res.status(401).json({ error: "Current password is incorrect" });
+    return;
+  }
+
+  await db
+    .insert(platformSettingsTable)
+    .values({ key: "adminPassword", value: newPassword })
+    .onConflictDoUpdate({ target: platformSettingsTable.key, set: { value: newPassword } });
+
+  res.json({ success: true });
+});
+
 router.get("/admin/plans", requireAdmin, async (req, res): Promise<void> => {
   const plans = await db.select().from(plansTable).orderBy(plansTable.id);
   res.json(ListPlansResponse.parse(plans));
@@ -226,6 +393,7 @@ router.patch("/admin/plans/:id", requireAdmin, async (req, res): Promise<void> =
 
   const updates: Record<string, unknown> = {};
   if (parsed.data.price !== undefined) updates.price = parsed.data.price;
+  if (parsed.data.comparePrice !== undefined) updates.comparePrice = parsed.data.comparePrice;
   if (parsed.data.productLimit !== undefined) updates.productLimit = parsed.data.productLimit;
   if (parsed.data.features !== undefined) updates.features = parsed.data.features;
 

@@ -6,6 +6,7 @@ export const plansTable = pgTable("plans", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   price: integer("price").notNull().default(0),
+  comparePrice: integer("compare_price"),
   productLimit: integer("product_limit"),
   features: text("features").notNull().default(""),
 });

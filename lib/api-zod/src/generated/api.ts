@@ -46,6 +46,23 @@ export const ListAdminShopsResponseItem = zod.object({
   "logoUrl": zod.string().nullish(),
   "bannerUrl": zod.string().nullish(),
   "brandColor": zod.string().nullish(),
+  "footerText": zod.string().nullish(),
+  "footerAddress": zod.string().nullish(),
+  "footerPhone": zod.string().nullish(),
+  "footerEmail": zod.string().nullish(),
+  "privacyPolicy": zod.string().nullish(),
+  "shippingPolicy": zod.string().nullish(),
+  "returnPolicy": zod.string().nullish(),
+  "facebookUrl": zod.string().nullish(),
+  "instagramUrl": zod.string().nullish(),
+  "twitterUrl": zod.string().nullish(),
+  "youtubeUrl": zod.string().nullish(),
+  "paymentMethods": zod.string().nullish(),
+  "subscriptionStartDate": zod.string().nullish(),
+  "subscriptionExpiryDate": zod.string().nullish(),
+  "showOnLanding": zod.boolean().nullish(),
+  "heroFeatured": zod.boolean().nullish(),
+  "permanentToken": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListAdminShopsResponse = zod.array(ListAdminShopsResponseItem)
@@ -71,8 +88,15 @@ export const UpdateShopParams = zod.object({
 })
 
 export const UpdateShopBody = zod.object({
+  "shopName": zod.string().optional(),
+  "ownerName": zod.string().optional(),
+  "whatsapp": zod.string().optional(),
   "plan": zod.string().optional(),
-  "status": zod.string().optional()
+  "status": zod.string().optional(),
+  "subscriptionStartDate": zod.string().nullish(),
+  "subscriptionExpiryDate": zod.string().nullish(),
+  "showOnLanding": zod.boolean().optional(),
+  "heroFeatured": zod.boolean().optional()
 })
 
 export const UpdateShopResponse = zod.object({
@@ -87,6 +111,23 @@ export const UpdateShopResponse = zod.object({
   "logoUrl": zod.string().nullish(),
   "bannerUrl": zod.string().nullish(),
   "brandColor": zod.string().nullish(),
+  "footerText": zod.string().nullish(),
+  "footerAddress": zod.string().nullish(),
+  "footerPhone": zod.string().nullish(),
+  "footerEmail": zod.string().nullish(),
+  "privacyPolicy": zod.string().nullish(),
+  "shippingPolicy": zod.string().nullish(),
+  "returnPolicy": zod.string().nullish(),
+  "facebookUrl": zod.string().nullish(),
+  "instagramUrl": zod.string().nullish(),
+  "twitterUrl": zod.string().nullish(),
+  "youtubeUrl": zod.string().nullish(),
+  "paymentMethods": zod.string().nullish(),
+  "subscriptionStartDate": zod.string().nullish(),
+  "subscriptionExpiryDate": zod.string().nullish(),
+  "showOnLanding": zod.boolean().nullish(),
+  "heroFeatured": zod.boolean().nullish(),
+  "permanentToken": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -114,12 +155,94 @@ export const GenerateTokenResponse = zod.object({
 
 
 /**
+ * @summary Generate or retrieve permanent login link for shop
+ */
+export const GeneratePermanentTokenParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GeneratePermanentTokenResponse = zod.object({
+  "token": zod.string(),
+  "shopId": zod.number(),
+  "permanentLink": zod.string()
+})
+
+
+/**
+ * @summary List all subscription plans (public)
+ */
+export const ListPublicPlansResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "price": zod.number(),
+  "comparePrice": zod.number().nullish(),
+  "productLimit": zod.number().nullable(),
+  "features": zod.string()
+})
+export const ListPublicPlansResponse = zod.array(ListPublicPlansResponseItem)
+
+
+/**
+ * @summary Get platform settings
+ */
+export const GetAdminSettingsResponse = zod.object({
+  "whatsappNumber": zod.string(),
+  "contactEmail": zod.string().nullish(),
+  "contactAddress": zod.string().nullish(),
+  "contactPhone": zod.string().nullish(),
+  "privacyPolicy": zod.string().nullish(),
+  "shippingPolicy": zod.string().nullish(),
+  "returnPolicy": zod.string().nullish(),
+  "facebookUrl": zod.string().nullish(),
+  "instagramUrl": zod.string().nullish(),
+  "twitterUrl": zod.string().nullish(),
+  "youtubeUrl": zod.string().nullish(),
+  "paymentMethods": zod.string().nullish()
+})
+
+
+/**
+ * @summary Update platform settings
+ */
+export const UpdateAdminSettingsBody = zod.object({
+  "whatsappNumber": zod.string().optional(),
+  "contactEmail": zod.string().optional(),
+  "contactAddress": zod.string().optional(),
+  "contactPhone": zod.string().optional(),
+  "privacyPolicy": zod.string().optional(),
+  "shippingPolicy": zod.string().optional(),
+  "returnPolicy": zod.string().optional(),
+  "facebookUrl": zod.string().optional(),
+  "instagramUrl": zod.string().optional(),
+  "twitterUrl": zod.string().optional(),
+  "youtubeUrl": zod.string().optional(),
+  "paymentMethods": zod.string().optional()
+})
+
+export const UpdateAdminSettingsResponse = zod.object({
+  "whatsappNumber": zod.string(),
+  "contactEmail": zod.string().nullish(),
+  "contactAddress": zod.string().nullish(),
+  "contactPhone": zod.string().nullish(),
+  "privacyPolicy": zod.string().nullish(),
+  "shippingPolicy": zod.string().nullish(),
+  "returnPolicy": zod.string().nullish(),
+  "facebookUrl": zod.string().nullish(),
+  "instagramUrl": zod.string().nullish(),
+  "twitterUrl": zod.string().nullish(),
+  "youtubeUrl": zod.string().nullish(),
+  "paymentMethods": zod.string().nullish()
+})
+
+
+/**
  * @summary List all subscription plans
  */
 export const ListPlansResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "price": zod.number(),
+  "comparePrice": zod.number().nullish(),
   "productLimit": zod.number().nullable(),
   "features": zod.string()
 })
@@ -135,6 +258,7 @@ export const UpdatePlanParams = zod.object({
 
 export const UpdatePlanBody = zod.object({
   "price": zod.number().optional(),
+  "comparePrice": zod.number().nullish(),
   "productLimit": zod.number().nullish(),
   "features": zod.string().optional()
 })
@@ -143,6 +267,7 @@ export const UpdatePlanResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "price": zod.number(),
+  "comparePrice": zod.number().nullish(),
   "productLimit": zod.number().nullable(),
   "features": zod.string()
 })
@@ -170,6 +295,23 @@ export const LoginWithTokenResponse = zod.object({
   "logoUrl": zod.string().nullish(),
   "bannerUrl": zod.string().nullish(),
   "brandColor": zod.string().nullish(),
+  "footerText": zod.string().nullish(),
+  "footerAddress": zod.string().nullish(),
+  "footerPhone": zod.string().nullish(),
+  "footerEmail": zod.string().nullish(),
+  "privacyPolicy": zod.string().nullish(),
+  "shippingPolicy": zod.string().nullish(),
+  "returnPolicy": zod.string().nullish(),
+  "facebookUrl": zod.string().nullish(),
+  "instagramUrl": zod.string().nullish(),
+  "twitterUrl": zod.string().nullish(),
+  "youtubeUrl": zod.string().nullish(),
+  "paymentMethods": zod.string().nullish(),
+  "subscriptionStartDate": zod.string().nullish(),
+  "subscriptionExpiryDate": zod.string().nullish(),
+  "showOnLanding": zod.boolean().nullish(),
+  "heroFeatured": zod.boolean().nullish(),
+  "permanentToken": zod.string().nullish(),
   "createdAt": zod.string()
 }).optional()
 })
@@ -197,6 +339,23 @@ export const AdminLoginResponse = zod.object({
   "logoUrl": zod.string().nullish(),
   "bannerUrl": zod.string().nullish(),
   "brandColor": zod.string().nullish(),
+  "footerText": zod.string().nullish(),
+  "footerAddress": zod.string().nullish(),
+  "footerPhone": zod.string().nullish(),
+  "footerEmail": zod.string().nullish(),
+  "privacyPolicy": zod.string().nullish(),
+  "shippingPolicy": zod.string().nullish(),
+  "returnPolicy": zod.string().nullish(),
+  "facebookUrl": zod.string().nullish(),
+  "instagramUrl": zod.string().nullish(),
+  "twitterUrl": zod.string().nullish(),
+  "youtubeUrl": zod.string().nullish(),
+  "paymentMethods": zod.string().nullish(),
+  "subscriptionStartDate": zod.string().nullish(),
+  "subscriptionExpiryDate": zod.string().nullish(),
+  "showOnLanding": zod.boolean().nullish(),
+  "heroFeatured": zod.boolean().nullish(),
+  "permanentToken": zod.string().nullish(),
   "createdAt": zod.string()
 }).optional()
 })
@@ -220,6 +379,23 @@ export const GetMeResponse = zod.object({
   "logoUrl": zod.string().nullish(),
   "bannerUrl": zod.string().nullish(),
   "brandColor": zod.string().nullish(),
+  "footerText": zod.string().nullish(),
+  "footerAddress": zod.string().nullish(),
+  "footerPhone": zod.string().nullish(),
+  "footerEmail": zod.string().nullish(),
+  "privacyPolicy": zod.string().nullish(),
+  "shippingPolicy": zod.string().nullish(),
+  "returnPolicy": zod.string().nullish(),
+  "facebookUrl": zod.string().nullish(),
+  "instagramUrl": zod.string().nullish(),
+  "twitterUrl": zod.string().nullish(),
+  "youtubeUrl": zod.string().nullish(),
+  "paymentMethods": zod.string().nullish(),
+  "subscriptionStartDate": zod.string().nullish(),
+  "subscriptionExpiryDate": zod.string().nullish(),
+  "showOnLanding": zod.boolean().nullish(),
+  "heroFeatured": zod.boolean().nullish(),
+  "permanentToken": zod.string().nullish(),
   "createdAt": zod.string()
 }).optional()
 })
@@ -240,6 +416,23 @@ export const GetMyShopResponse = zod.object({
   "logoUrl": zod.string().nullish(),
   "bannerUrl": zod.string().nullish(),
   "brandColor": zod.string().nullish(),
+  "footerText": zod.string().nullish(),
+  "footerAddress": zod.string().nullish(),
+  "footerPhone": zod.string().nullish(),
+  "footerEmail": zod.string().nullish(),
+  "privacyPolicy": zod.string().nullish(),
+  "shippingPolicy": zod.string().nullish(),
+  "returnPolicy": zod.string().nullish(),
+  "facebookUrl": zod.string().nullish(),
+  "instagramUrl": zod.string().nullish(),
+  "twitterUrl": zod.string().nullish(),
+  "youtubeUrl": zod.string().nullish(),
+  "paymentMethods": zod.string().nullish(),
+  "subscriptionStartDate": zod.string().nullish(),
+  "subscriptionExpiryDate": zod.string().nullish(),
+  "showOnLanding": zod.boolean().nullish(),
+  "heroFeatured": zod.boolean().nullish(),
+  "permanentToken": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -256,7 +449,16 @@ export const UpdateMyShopBody = zod.object({
   "brandColor": zod.string().optional(),
   "footerText": zod.string().optional(),
   "footerAddress": zod.string().optional(),
-  "footerPhone": zod.string().optional()
+  "footerPhone": zod.string().optional(),
+  "footerEmail": zod.string().optional(),
+  "privacyPolicy": zod.string().optional(),
+  "shippingPolicy": zod.string().optional(),
+  "returnPolicy": zod.string().optional(),
+  "facebookUrl": zod.string().optional(),
+  "instagramUrl": zod.string().optional(),
+  "twitterUrl": zod.string().optional(),
+  "youtubeUrl": zod.string().optional(),
+  "paymentMethods": zod.string().optional()
 })
 
 export const UpdateMyShopResponse = zod.object({
@@ -271,6 +473,23 @@ export const UpdateMyShopResponse = zod.object({
   "logoUrl": zod.string().nullish(),
   "bannerUrl": zod.string().nullish(),
   "brandColor": zod.string().nullish(),
+  "footerText": zod.string().nullish(),
+  "footerAddress": zod.string().nullish(),
+  "footerPhone": zod.string().nullish(),
+  "footerEmail": zod.string().nullish(),
+  "privacyPolicy": zod.string().nullish(),
+  "shippingPolicy": zod.string().nullish(),
+  "returnPolicy": zod.string().nullish(),
+  "facebookUrl": zod.string().nullish(),
+  "instagramUrl": zod.string().nullish(),
+  "twitterUrl": zod.string().nullish(),
+  "youtubeUrl": zod.string().nullish(),
+  "paymentMethods": zod.string().nullish(),
+  "subscriptionStartDate": zod.string().nullish(),
+  "subscriptionExpiryDate": zod.string().nullish(),
+  "showOnLanding": zod.boolean().nullish(),
+  "heroFeatured": zod.boolean().nullish(),
+  "permanentToken": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -283,7 +502,8 @@ export const GetShopStatsResponse = zod.object({
   "ordersToday": zod.number(),
   "revenueThisMonth": zod.number(),
   "lowStockCount": zod.number(),
-  "pendingOrders": zod.number().optional()
+  "pendingOrders": zod.number().optional(),
+  "productLimit": zod.number().nullish()
 })
 
 
@@ -297,7 +517,9 @@ export const ListMyProductsResponseItem = zod.object({
   "price": zod.number(),
   "stock": zod.number(),
   "category": zod.string().nullish(),
+  "description": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
+  "variants": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListMyProductsResponse = zod.array(ListMyProductsResponseItem)
@@ -311,7 +533,9 @@ export const CreateProductBody = zod.object({
   "price": zod.number(),
   "stock": zod.number().optional(),
   "category": zod.string().optional(),
-  "imageUrl": zod.string().optional()
+  "description": zod.string().optional(),
+  "imageUrl": zod.string().optional(),
+  "variants": zod.string().optional()
 })
 
 
@@ -327,7 +551,9 @@ export const UpdateProductBody = zod.object({
   "price": zod.number().optional(),
   "stock": zod.number().optional(),
   "category": zod.string().optional(),
-  "imageUrl": zod.string().optional()
+  "description": zod.string().optional(),
+  "imageUrl": zod.string().optional(),
+  "variants": zod.string().optional()
 })
 
 export const UpdateProductResponse = zod.object({
@@ -337,7 +563,9 @@ export const UpdateProductResponse = zod.object({
   "price": zod.number(),
   "stock": zod.number(),
   "category": zod.string().nullish(),
+  "description": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
+  "variants": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -419,7 +647,16 @@ export const GetPublicStoreResponse = zod.object({
   "brandColor": zod.string().nullish(),
   "footerText": zod.string().nullish(),
   "footerAddress": zod.string().nullish(),
-  "footerPhone": zod.string().nullish()
+  "footerPhone": zod.string().nullish(),
+  "footerEmail": zod.string().nullish(),
+  "privacyPolicy": zod.string().nullish(),
+  "shippingPolicy": zod.string().nullish(),
+  "returnPolicy": zod.string().nullish(),
+  "facebookUrl": zod.string().nullish(),
+  "instagramUrl": zod.string().nullish(),
+  "twitterUrl": zod.string().nullish(),
+  "youtubeUrl": zod.string().nullish(),
+  "paymentMethods": zod.string().nullish()
 })
 
 
@@ -437,7 +674,9 @@ export const ListPublicProductsResponseItem = zod.object({
   "price": zod.number(),
   "stock": zod.number(),
   "category": zod.string().nullish(),
+  "description": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
+  "variants": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListPublicProductsResponse = zod.array(ListPublicProductsResponseItem)

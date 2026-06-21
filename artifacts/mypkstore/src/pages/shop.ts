@@ -5,7 +5,6 @@ import {
   shopsTable,
   productsTable,
   ordersTable,
-  plansTable,
 } from "@workspace/db";
 import {
   GetMyShopResponse,
@@ -27,18 +26,9 @@ import {
 
 const router: IRouter = Router();
 
-async function requireShopOwner(req: any, res: any, next: any) {
+function requireShopOwner(req: any, res: any, next: any) {
   if (req.session?.role !== "shopOwner" || !req.session?.shopId) {
     res.status(401).json({ error: "Shop owner access required" });
-    return;
-  }
-  // Block access if subscription has expired
-  const [ownShop] = await db
-    .select()
-    .from(shopsTable)
-    .where(eq(shopsTable.id, req.session.shopId));
-  if (ownShop && ownShop.subscriptionExpiryDate && new Date(ownShop.subscriptionExpiryDate) < new Date()) {
-    res.status(403).json({ error: "Subscription expired", expired: true });
     return;
   }
   next();
@@ -55,7 +45,7 @@ router.get("/shop/me", requireShopOwner, async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(GetMyShopResponse.parse({ ...shop, createdAt: shop.createdAt.toISOString(), subscriptionStartDate: shop.subscriptionStartDate?.toISOString() ?? null, subscriptionExpiryDate: shop.subscriptionExpiryDate?.toISOString() ?? null }));
+  res.json(GetMyShopResponse.parse({ ...shop, createdAt: shop.createdAt.toISOString() }));
 });
 
 router.patch("/shop/me", requireShopOwner, async (req, res): Promise<void> => {
@@ -63,21 +53,6 @@ router.patch("/shop/me", requireShopOwner, async (req, res): Promise<void> => {
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
-  }
-
-  const shopId = req.session.shopId!;
-
-  // Enforce Basic plan: max 1 payment method
-  if (parsed.data.paymentMethods !== undefined) {
-    const [currentShop] = await db.select({ plan: shopsTable.plan }).from(shopsTable).where(eq(shopsTable.id, shopId));
-    if (currentShop?.plan === "Basic") {
-      let pmArr: unknown[] = [];
-      try { const p = JSON.parse(parsed.data.paymentMethods); if (Array.isArray(p)) pmArr = p; } catch {}
-      if (pmArr.length > 1) {
-        res.status(403).json({ error: "Basic plan mein sirf 1 payment method allowed hai. Pro ya Business plan pe upgrade karwayein." });
-        return;
-      }
-    }
   }
 
   const updates: Record<string, unknown> = {};
@@ -90,15 +65,9 @@ router.patch("/shop/me", requireShopOwner, async (req, res): Promise<void> => {
   if (parsed.data.footerText !== undefined) updates.footerText = parsed.data.footerText;
   if (parsed.data.footerAddress !== undefined) updates.footerAddress = parsed.data.footerAddress;
   if (parsed.data.footerPhone !== undefined) updates.footerPhone = parsed.data.footerPhone;
-  if (parsed.data.footerEmail !== undefined) updates.footerEmail = parsed.data.footerEmail;
-  if (parsed.data.privacyPolicy !== undefined) updates.privacyPolicy = parsed.data.privacyPolicy;
-  if (parsed.data.shippingPolicy !== undefined) updates.shippingPolicy = parsed.data.shippingPolicy;
-  if (parsed.data.returnPolicy !== undefined) updates.returnPolicy = parsed.data.returnPolicy;
   if (parsed.data.facebookUrl !== undefined) updates.facebookUrl = parsed.data.facebookUrl;
   if (parsed.data.instagramUrl !== undefined) updates.instagramUrl = parsed.data.instagramUrl;
   if (parsed.data.twitterUrl !== undefined) updates.twitterUrl = parsed.data.twitterUrl;
-  if (parsed.data.youtubeUrl !== undefined) updates.youtubeUrl = parsed.data.youtubeUrl;
-  if (parsed.data.paymentMethods !== undefined) updates.paymentMethods = parsed.data.paymentMethods;
 
   const [shop] = await db
     .update(shopsTable)
@@ -111,7 +80,7 @@ router.patch("/shop/me", requireShopOwner, async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(UpdateMyShopResponse.parse({ ...shop, createdAt: shop.createdAt.toISOString(), subscriptionStartDate: shop.subscriptionStartDate?.toISOString() ?? null, subscriptionExpiryDate: shop.subscriptionExpiryDate?.toISOString() ?? null }));
+  res.json(UpdateMyShopResponse.parse({ ...shop, createdAt: shop.createdAt.toISOString() }));
 });
 
 router.get("/shop/stats", requireShopOwner, async (req, res): Promise<void> => {
@@ -144,11 +113,6 @@ router.get("/shop/stats", requireShopOwner, async (req, res): Promise<void> => {
 
   const pendingOrders = allOrders.filter((o) => o.status === "pending").length;
 
-  const [shopRow] = await db.select({ plan: shopsTable.plan }).from(shopsTable).where(eq(shopsTable.id, shopId));
-  const [planRow] = shopRow
-    ? await db.select({ productLimit: plansTable.productLimit }).from(plansTable).where(eq(plansTable.name, shopRow.plan))
-    : [undefined];
-
   res.json(
     GetShopStatsResponse.parse({
       totalProducts,
@@ -156,7 +120,6 @@ router.get("/shop/stats", requireShopOwner, async (req, res): Promise<void> => {
       revenueThisMonth,
       lowStockCount,
       pendingOrders,
-      productLimit: planRow?.productLimit ?? null,
     }),
   );
 });
@@ -182,24 +145,9 @@ router.post("/shop/products", requireShopOwner, async (req, res): Promise<void> 
     return;
   }
 
-  const shopId = req.session.shopId!;
-
-  // Enforce product limit from plan
-  const [shopPlan] = await db.select({ plan: shopsTable.plan }).from(shopsTable).where(eq(shopsTable.id, shopId));
-  if (shopPlan) {
-    const [planRow] = await db.select({ productLimit: plansTable.productLimit }).from(plansTable).where(eq(plansTable.name, shopPlan.plan));
-    if (planRow?.productLimit != null) {
-      const existing = await db.select().from(productsTable).where(eq(productsTable.shopId, shopId));
-      if (existing.length >= planRow.productLimit) {
-        res.status(403).json({ error: `Aapka ${shopPlan.plan} plan sirf ${planRow.productLimit} products allow karta hai. Zyada products ke liye plan upgrade karwayein admin se.` });
-        return;
-      }
-    }
-  }
-
   const [product] = await db
     .insert(productsTable)
-    .values({ ...parsed.data, shopId })
+    .values({ ...parsed.data, shopId: req.session.shopId! })
     .returning();
 
   res.status(201).json({ ...product, createdAt: product.createdAt.toISOString() });

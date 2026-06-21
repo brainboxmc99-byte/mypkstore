@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+
 import { useLocation } from "wouter";
 import { 
   useGetMe, 
@@ -24,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -62,15 +64,37 @@ export function ShopDashboard() {
     }
   });
 
-  const { data: shop } = useGetMyShop({
-    query: { queryKey: getGetMyShopQueryKey(), enabled: !!user && user.role === "shopOwner" }
+  const { data: shop, error: shopError } = useGetMyShop({
+    query: { queryKey: getGetMyShopQueryKey(), enabled: !!user && user.role === "shopOwner", staleTime: 0, gcTime: 0 }
   });
 
   const { data: stats } = useGetShopStats({
     query: { queryKey: getGetShopStatsQueryKey(), enabled: !!user && user.role === "shopOwner" }
   });
 
+  const isExpired = (shopError as any)?.expired === true
+    || (shopError as any)?.response?.data?.expired === true
+    || (shopError as any)?.status === 403
+    || (shopError as any)?.response?.status === 403;
+
   if (isUserLoading || !user || user.role !== "shopOwner") return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+
+  if (isExpired) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border p-8 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" className="w-8 h-8">
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-stone-900 mb-2">Subscription Expired</h1>
+          <p className="text-stone-600 mb-6">Aapki subscription expire ho gayi hy. Payment karay Active ho jaeay gi.</p>
+          <button onClick={() => { window.location.href = "/login"; }} className="text-sm text-stone-500 underline hover:text-stone-700">Logout</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -82,8 +106,8 @@ export function ShopDashboard() {
           </div>
           <div className="flex items-center gap-3">
             {shop && (
-              <Button variant="secondary" size="sm" onClick={() => window.open(`/store/${shop.slug}`, "_blank")}>
-                View Store
+              <Button variant="secondary" size="sm" asChild>
+                <a href={`/store/${shop.slug}`} target="_blank" rel="noopener noreferrer">View Store</a>
               </Button>
             )}
             <Button variant="outline" className="text-foreground border-transparent hover:bg-white/10 hover:text-white" onClick={() => logout.mutate()} size="sm">Logout</Button>
@@ -140,7 +164,7 @@ export function ShopDashboard() {
           </TabsList>
           
           <TabsContent value="products" className="space-y-4 mt-6">
-            <ProductsTab getImageUrl={getImageUrl} />
+            <ProductsTab getImageUrl={getImageUrl} shop={shop} stats={stats} />
           </TabsContent>
           
           <TabsContent value="orders" className="space-y-4 mt-6">
@@ -148,7 +172,7 @@ export function ShopDashboard() {
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4 mt-6">
-            <SettingsTab shop={shop} />
+            {shop ? <SettingsTab key={shop.id} shop={shop} /> : <div className="py-8 text-center text-muted-foreground">Loading settings...</div>}
           </TabsContent>
         </Tabs>
       </main>
@@ -156,11 +180,15 @@ export function ShopDashboard() {
   );
 }
 
-function ProductsTab({ getImageUrl }: { getImageUrl: (url: string | null | undefined) => string }) {
+function ProductsTab({ getImageUrl, shop, stats }: { getImageUrl: (url: string | null | undefined) => string; shop?: any; stats?: any }) {
   const { data: products } = useListMyProducts({ query: { queryKey: getListMyProductsQueryKey() } });
   const deleteProduct = useDeleteProduct();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const planLimit: number | null = stats?.productLimit ?? null;
+  const productCount = stats?.totalProducts ?? (products?.length ?? 0);
+  const limitReached = planLimit !== null && productCount >= planLimit;
 
   const handleDelete = (id: number) => {
     if (confirm("Are you sure you want to delete this product?")) {
@@ -177,16 +205,23 @@ function ProductsTab({ getImageUrl }: { getImageUrl: (url: string | null | undef
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Inventory</h2>
-        <ProductDialog mode="create" />
+        <div>
+          <h2 className="text-xl font-semibold">Inventory</h2>
+          {planLimit !== null && (
+            <p className={`text-sm mt-0.5 ${limitReached ? "text-destructive font-medium" : "text-muted-foreground"}`}>
+              {productCount} / {planLimit} products used{limitReached ? " — Limit reached!" : ""}
+            </p>
+          )}
+        </div>
+        <ProductDialog mode="create" shop={shop} limitReached={limitReached} />
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {products?.map((product) => (
           <Card key={product.id} className="overflow-hidden flex flex-col">
-            <div className="aspect-square bg-muted relative">
+            <div className="aspect-square bg-muted relative overflow-hidden">
               {product.imageUrl ? (
-                <img src={getImageUrl(product.imageUrl)} alt={product.name} className="object-cover w-full h-full" />
+                <img src={getImageUrl(product.imageUrl)} alt={product.name} className="absolute inset-0 w-full h-full object-contain p-1" />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">No image</div>
               )}
@@ -206,7 +241,7 @@ function ProductsTab({ getImageUrl }: { getImageUrl: (url: string | null | undef
               </div>
               
               <div className="flex gap-2 mt-4 pt-4 border-t">
-                <ProductDialog mode="edit" product={product} />
+                <ProductDialog mode="edit" product={product} shop={shop} />
                 <Button variant="ghost" className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDelete(product.id)}>Delete</Button>
               </div>
             </CardContent>
@@ -222,13 +257,21 @@ function ProductsTab({ getImageUrl }: { getImageUrl: (url: string | null | undef
   );
 }
 
-function ProductDialog({ mode, product }: { mode: "create" | "edit", product?: any }) {
+function ProductDialog({ mode, product, shop, limitReached }: { mode: "create" | "edit", product?: any, shop?: any, limitReached?: boolean }) {
+  const isPro = shop?.plan === "Pro" || shop?.plan === "Business";
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState(
     product ? 
-    { name: product.name, price: product.price.toString(), stock: product.stock.toString(), category: product.category || "", imageUrl: product.imageUrl || "" } :
-    { name: "", price: "", stock: "10", category: "", imageUrl: "" }
+    { name: product.name, price: product.price.toString(), stock: product.stock.toString(), category: product.category || "", description: product.description || "", imageUrl: product.imageUrl || "" } :
+    { name: "", price: "", stock: "10", category: "", description: "", imageUrl: "" }
   );
+  const [variantRows, setVariantRows] = useState<Array<{name: string; price: string; stock: string}>>(() => {
+    try {
+      const p = JSON.parse(product?.variants || "[]");
+      if (Array.isArray(p)) return p.map((v: any) => ({ name: v.name || "", price: v.price != null ? String(v.price) : "", stock: v.stock != null ? String(v.stock) : "0" }));
+    } catch {}
+    return [];
+  });
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -239,12 +282,22 @@ function ProductDialog({ mode, product }: { mode: "create" | "edit", product?: a
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const validVariants = isPro ? variantRows.filter(v => v.name.trim()) : [];
+    const variantsJson = validVariants.length > 0
+      ? JSON.stringify(validVariants.map(v => ({
+          name: v.name.trim(),
+          ...(v.price !== "" ? { price: parseInt(v.price) } : {}),
+          stock: v.stock !== "" ? parseInt(v.stock) : 0,
+        })))
+      : "[]";
     const data = {
       name: formData.name,
       price: parseInt(formData.price),
       stock: parseInt(formData.stock),
       category: formData.category,
-      imageUrl: formData.imageUrl
+      description: formData.description,
+      imageUrl: formData.imageUrl,
+      variants: variantsJson,
     };
 
     if (mode === "create") {
@@ -254,7 +307,8 @@ function ProductDialog({ mode, product }: { mode: "create" | "edit", product?: a
           queryClient.invalidateQueries({ queryKey: getListMyProductsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetShopStatsQueryKey() });
           setOpen(false);
-          setFormData({ name: "", price: "", stock: "10", category: "", imageUrl: "" });
+          setFormData({ name: "", price: "", stock: "10", category: "", description: "", imageUrl: "" });
+          setVariantRows([]);
         }
       });
     } else if (product) {
@@ -271,7 +325,13 @@ function ProductDialog({ mode, product }: { mode: "create" | "edit", product?: a
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {mode === "create" ? <Button>Add Product</Button> : <Button variant="secondary" className="flex-1">Edit</Button>}
+        {mode === "create" ? (
+          <Button disabled={limitReached} title={limitReached ? "Product limit reached. Contact admin to upgrade plan." : undefined}>
+            Add Product
+          </Button>
+        ) : (
+          <Button variant="secondary" className="flex-1">Edit</Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -296,12 +356,48 @@ function ProductDialog({ mode, product }: { mode: "create" | "edit", product?: a
             <Label>Category (Optional)</Label>
             <Input value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} />
           </div>
+          <div className="space-y-2">
+            <Label>Description (Optional)</Label>
+            <Textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Product ki short description (3 lines)..." rows={3} />
+          </div>
           <ImageUpload
             label="Product Image (Optional)"
             value={formData.imageUrl}
             onChange={url => setFormData({...formData, imageUrl: url})}
             placeholder="https://..."
           />
+          {isPro ? (
+            <div className="space-y-3 pt-3 border-t">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Variants (Optional)</Label>
+                <Button type="button" variant="outline" size="sm" onClick={() => setVariantRows(r => [...r, { name: "", price: "", stock: "0" }])}>+ Add Variant</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">e.g. Size: Small, Color: Red — har variant ka apna price aur stock hoga.</p>
+              {variantRows.map((row, i) => (
+                <div key={i} className="flex gap-2 items-end">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs text-muted-foreground">Name</Label>
+                    <Input value={row.name} onChange={e => setVariantRows(r => r.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} placeholder="e.g. Small / Red" className="h-8 text-sm" />
+                  </div>
+                  <div className="w-24 space-y-1">
+                    <Label className="text-xs text-muted-foreground">Price (PKR)</Label>
+                    <Input type="number" value={row.price} onChange={e => setVariantRows(r => r.map((x, j) => j === i ? { ...x, price: e.target.value } : x))} placeholder="Base" className="h-8 text-sm" />
+                  </div>
+                  <div className="w-20 space-y-1">
+                    <Label className="text-xs text-muted-foreground">Stock</Label>
+                    <Input type="number" value={row.stock} onChange={e => setVariantRows(r => r.map((x, j) => j === i ? { ...x, stock: e.target.value } : x))} className="h-8 text-sm" />
+                  </div>
+                  <Button type="button" variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 h-8 px-2 mb-0" onClick={() => setVariantRows(r => r.filter((_, j) => j !== i))}>✕</Button>
+                </div>
+              ))}
+              {variantRows.length === 0 && <p className="text-xs text-muted-foreground italic">Koi variant nahi — product sirf ek hi option mein milega.</p>}
+            </div>
+          ) : (
+            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <span className="text-amber-600 text-sm">⚡</span>
+              <p className="text-xs text-amber-700">Variants feature <strong>Pro</strong> aur <strong>Business</strong> plan mein available hai. Admin se plan upgrade karwayein.</p>
+            </div>
+          )}
           <DialogFooter>
             <Button type="submit" disabled={isPending}>{isPending ? "Saving..." : "Save Product"}</Button>
           </DialogFooter>
@@ -422,6 +518,7 @@ function OrdersTab() {
 }
 
 function SettingsTab({ shop }: { shop: any }) {
+  const isPro = shop?.plan === "Pro" || shop?.plan === "Business";
   const [formData, setFormData] = useState({
     shopName: shop?.shopName || "",
     tagline: shop?.tagline || "",
@@ -432,6 +529,15 @@ function SettingsTab({ shop }: { shop: any }) {
     footerText: shop?.footerText || "",
     footerAddress: shop?.footerAddress || "",
     footerPhone: shop?.footerPhone || "",
+    footerEmail: shop?.footerEmail || "",
+    privacyPolicy: shop?.privacyPolicy || "",
+    shippingPolicy: shop?.shippingPolicy || "",
+    returnPolicy: shop?.returnPolicy || "",
+    facebookUrl: shop?.facebookUrl || "",
+    instagramUrl: shop?.instagramUrl || "",
+    twitterUrl: shop?.twitterUrl || "",
+    youtubeUrl: shop?.youtubeUrl || "",
+    paymentMethods: shop?.paymentMethods || "",
   });
 
   const updateShop = useUpdateMyShop();
@@ -440,6 +546,20 @@ function SettingsTab({ shop }: { shop: any }) {
 
   React.useEffect(() => {
     if (shop) {
+      const planIsPro = shop.plan === "Pro" || shop.plan === "Business";
+      const parsePm = (raw: string): Array<Record<string, string>> => {
+        if (!raw) return [];
+        try {
+          const p = JSON.parse(raw);
+          if (Array.isArray(p)) return p;
+          return [];
+        } catch {
+          return raw.split(",").filter(Boolean).map((m: string) => ({ method: m.trim() })).filter((m: {method: string}) => m.method);
+        }
+      };
+      let pmArr = parsePm(shop.paymentMethods || "");
+      if (!planIsPro && pmArr.length > 1) pmArr = pmArr.slice(0, 1);
+
       setFormData({
         shopName: shop.shopName || "",
         tagline: shop.tagline || "",
@@ -450,13 +570,36 @@ function SettingsTab({ shop }: { shop: any }) {
         footerText: shop.footerText || "",
         footerAddress: shop.footerAddress || "",
         footerPhone: shop.footerPhone || "",
+        footerEmail: shop.footerEmail || "",
+        privacyPolicy: planIsPro ? (shop.privacyPolicy || "") : "",
+        shippingPolicy: planIsPro ? (shop.shippingPolicy || "") : "",
+        returnPolicy: planIsPro ? (shop.returnPolicy || "") : "",
+        facebookUrl: planIsPro ? (shop.facebookUrl || "") : "",
+        instagramUrl: planIsPro ? (shop.instagramUrl || "") : "",
+        twitterUrl: planIsPro ? (shop.twitterUrl || "") : "",
+        youtubeUrl: planIsPro ? (shop.youtubeUrl || "") : "",
+        paymentMethods: JSON.stringify(pmArr),
       });
     }
   }, [shop]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateShop.mutate({ data: formData }, {
+    let submitData = { ...formData };
+    if (!isPro) {
+      submitData.privacyPolicy = "";
+      submitData.shippingPolicy = "";
+      submitData.returnPolicy = "";
+      submitData.facebookUrl = "";
+      submitData.instagramUrl = "";
+      submitData.twitterUrl = "";
+      submitData.youtubeUrl = "";
+      let pmArr: Array<Record<string, string>> = [];
+      try { const p = JSON.parse(submitData.paymentMethods); if (Array.isArray(p)) pmArr = p; } catch {}
+      if (pmArr.length > 1) pmArr = pmArr.slice(0, 1);
+      submitData.paymentMethods = JSON.stringify(pmArr);
+    }
+    updateShop.mutate({ data: submitData }, {
       onSuccess: () => {
         toast({ title: "Settings saved" });
         queryClient.invalidateQueries({ queryKey: getGetMyShopQueryKey() });
@@ -523,6 +666,166 @@ function SettingsTab({ shop }: { shop: any }) {
                 <Label>Phone Number</Label>
                 <Input value={formData.footerPhone} onChange={e => setFormData({...formData, footerPhone: e.target.value})} placeholder="e.g. 0300-1234567" />
               </div>
+              <div className="space-y-2">
+                <Label>Email Address (optional)</Label>
+                <Input value={formData.footerEmail} onChange={e => setFormData({...formData, footerEmail: e.target.value})} placeholder="e.g. info@yourshop.com" />
+              </div>
+            </div>
+
+            <div className="pt-4 border-t space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium">Policies</h3>
+                {!isPro && <span className="text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">Pro / Business</span>}
+              </div>
+              {isPro ? (
+                <>
+                  <p className="text-xs text-muted-foreground">In ka text store ke footer mein link ke tor pe dikhega. Khaali rakhne se link nahi aaye ga.</p>
+                  <div className="space-y-2">
+                    <Label>Privacy Policy</Label>
+                    <Textarea value={formData.privacyPolicy} onChange={e => setFormData({...formData, privacyPolicy: e.target.value})} placeholder="Privacy policy ka text yahan likhein..." rows={4} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Shipping Policy</Label>
+                    <Textarea value={formData.shippingPolicy} onChange={e => setFormData({...formData, shippingPolicy: e.target.value})} placeholder="Shipping policy ka text yahan likhein..." rows={4} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Return Policy</Label>
+                    <Textarea value={formData.returnPolicy} onChange={e => setFormData({...formData, returnPolicy: e.target.value})} placeholder="Return / Refund policy ka text yahan likhein..." rows={4} />
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <span className="text-2xl">🔒</span>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-800">Pro / Business Plan Required</p>
+                    <p className="text-xs text-amber-700 mt-0.5">Privacy, Shipping, aur Return policies sirf Pro aur Business plan mein available hain. Admin se plan upgrade karwayein.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 border-t space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium">Social Media</h3>
+                {!isPro && <span className="text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">Pro / Business</span>}
+              </div>
+              {isPro ? (
+                <>
+                  <div className="space-y-2">
+                    <Label>Facebook Page URL</Label>
+                    <Input value={formData.facebookUrl} onChange={e => setFormData({...formData, facebookUrl: e.target.value})} placeholder="e.g. https://facebook.com/yourshop" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Instagram Profile URL</Label>
+                    <Input value={formData.instagramUrl} onChange={e => setFormData({...formData, instagramUrl: e.target.value})} placeholder="e.g. https://instagram.com/yourshop" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Twitter / X Profile URL</Label>
+                    <Input value={formData.twitterUrl} onChange={e => setFormData({...formData, twitterUrl: e.target.value})} placeholder="e.g. https://twitter.com/yourshop" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>YouTube Channel URL</Label>
+                    <Input value={formData.youtubeUrl} onChange={e => setFormData({...formData, youtubeUrl: e.target.value})} placeholder="e.g. https://youtube.com/@yourshop" />
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <span className="text-2xl">🔒</span>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-800">Pro / Business Plan Required</p>
+                    <p className="text-xs text-amber-700 mt-0.5">Facebook, Instagram, Twitter, aur YouTube links sirf Pro aur Business plan mein available hain.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 border-t space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium">Payment Methods</h3>
+                {!isPro && <span className="text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">Pro / Business</span>}
+              </div>
+              {isPro ? (
+                <>
+                  <p className="text-xs text-muted-foreground">Jo payment methods accept karte hain unhe enable karein aur account details fill karein — customers ko store pe dikhenge.</p>
+                  <div className="space-y-3">
+                    {(([
+                      { key: "jazzcash",      label: "JazzCash",          color: "bg-red-100 text-red-700 border-red-200",     fields: [{ name: "accountNumber", label: "Account Number / Phone", placeholder: "e.g. 03001234567" }, { name: "accountName", label: "Account Name", placeholder: "e.g. Muhammad Ali" }] },
+                      { key: "easypaisa",     label: "EasyPaisa",         color: "bg-green-100 text-green-700 border-green-200", fields: [{ name: "accountNumber", label: "Account Number / Phone", placeholder: "e.g. 03001234567" }, { name: "accountName", label: "Account Name", placeholder: "e.g. Muhammad Ali" }] },
+                      { key: "cod",           label: "Cash on Delivery",  color: "bg-amber-100 text-amber-700 border-amber-200", fields: [] },
+                      { key: "bank_transfer", label: "Bank Transfer",     color: "bg-blue-100 text-blue-700 border-blue-200",   fields: [{ name: "bankName", label: "Bank Name", placeholder: "e.g. HBL / MCB / Meezan" }, { name: "accountNumber", label: "Account Number", placeholder: "e.g. 0123456789012" }, { name: "accountTitle", label: "Account Title", placeholder: "e.g. Muhammad Ali Khan" }] },
+                      { key: "nayapay",       label: "NayaPay",           color: "bg-purple-100 text-purple-700 border-purple-200", fields: [{ name: "accountNumber", label: "Account Number / Phone", placeholder: "e.g. 03001234567" }, { name: "accountName", label: "Account Name", placeholder: "e.g. Muhammad Ali" }] },
+                      { key: "sadapay",       label: "SadaPay",           color: "bg-sky-100 text-sky-700 border-sky-200",      fields: [{ name: "accountNumber", label: "Account Number / Phone", placeholder: "e.g. 03001234567" }, { name: "accountName", label: "Account Name", placeholder: "e.g. Muhammad Ali" }] },
+                    ] as Array<{ key: string; label: string; color: string; fields: Array<{ name: string; label: string; placeholder: string }> }>)).map(({ key, label, color, fields }) => {
+                      const parsePmLocal = (raw: string): Array<Record<string, string>> => {
+                        try { const p = JSON.parse(raw); if (Array.isArray(p)) return p; } catch {
+                          return raw.split(",").filter(Boolean).map((m: string) => ({ method: m.trim() })).filter((m: {method:string}) => m.method);
+                        }
+                        return [];
+                      };
+                      const pmArr = parsePmLocal(formData.paymentMethods);
+                      const entry = pmArr.find(e => e.method === key) || null;
+                      const selected = !!entry;
+                      const toggle = () => {
+                        const cur = parsePmLocal(formData.paymentMethods);
+                        const updated = selected ? cur.filter(e => e.method !== key) : [...cur, { method: key }];
+                        setFormData({ ...formData, paymentMethods: JSON.stringify(updated) });
+                      };
+                      const updateField = (field: string, value: string) => {
+                        const cur = parsePmLocal(formData.paymentMethods);
+                        const idx = cur.findIndex(e => e.method === key);
+                        if (idx >= 0) cur[idx] = { ...cur[idx], [field]: value };
+                        setFormData({ ...formData, paymentMethods: JSON.stringify(cur) });
+                      };
+                      const borderClass = color.split(" ")[2];
+                      return (
+                        <div key={key} className={`border rounded-lg overflow-hidden transition-all ${selected ? borderClass : "border-border"}`}>
+                          <label className={`flex items-center gap-3 p-3 cursor-pointer select-none transition-colors ${selected ? color : "bg-muted/40 hover:bg-muted/60"}`}>
+                            <input type="checkbox" checked={selected} onChange={toggle} className="w-4 h-4 rounded" />
+                            <span className="text-sm font-bold">{label}</span>
+                          </label>
+                          {selected && fields.length > 0 && (
+                            <div className="p-3 bg-background space-y-2 border-t border-border">
+                              {fields.map(f => (
+                                <div key={f.name} className="space-y-1">
+                                  <Label className="text-xs text-muted-foreground">{f.label}</Label>
+                                  <Input value={entry?.[f.name] || ""} onChange={e => updateField(f.name, e.target.value)} placeholder={f.placeholder} className="h-8 text-sm" />
+                                </div>
+                              ))}
+                              <div className="pt-1 border-t border-border/60">
+                                <ImageUpload
+                                  label="Custom Icon (optional)"
+                                  value={entry?.["iconUrl"] || ""}
+                                  onChange={url => updateField("iconUrl", url)}
+                                  placeholder="Ya icon ka URL paste karein"
+                                />
+                              </div>
+                            </div>
+                          )}
+                          {selected && fields.length === 0 && (
+                            <div className="p-3 bg-background border-t border-border space-y-2">
+                              <p className="text-xs text-muted-foreground">Delivery ke waqt payment li jaaye gi — koi advance nahi.</p>
+                              <ImageUpload
+                                label="Custom Icon (optional)"
+                                value={entry?.["iconUrl"] || ""}
+                                onChange={url => updateField("iconUrl", url)}
+                                placeholder="Ya icon ka URL paste karein"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <span className="text-2xl">🔒</span>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-800">Pro / Business Plan Required</p>
+                    <p className="text-xs text-amber-700 mt-0.5">JazzCash, EasyPaisa, Bank Transfer aur baqi payment methods sirf Pro aur Business plan mein available hain. Admin se plan upgrade karwayein.</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <Button type="submit" disabled={updateShop.isPending}>

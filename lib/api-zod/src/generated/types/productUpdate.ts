@@ -11,5 +11,6 @@ export interface ProductUpdate {
   price?: number;
   stock?: number;
   category?: string;
+  description?: string;
   imageUrl?: string;
 }

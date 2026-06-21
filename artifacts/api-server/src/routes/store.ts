@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, shopsTable, productsTable, ordersTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
+import { db, shopsTable, productsTable, ordersTable, plansTable, platformSettingsTable } from "@workspace/db";
 import {
   GetPublicStoreParams,
   GetPublicStoreResponse,
@@ -8,10 +8,75 @@ import {
   ListPublicProductsResponse,
   SubmitOrderParams,
   SubmitOrderBody,
+  ListPublicPlansResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+router.get("/plans", async (_req, res): Promise<void> => {
+  const plans = await db.select().from(plansTable).orderBy(plansTable.id);
+  res.json(ListPublicPlansResponse.parse(plans));
+});
+
+router.get("/settings/public", async (_req, res): Promise<void> => {
+  const rows = await db.select().from(platformSettingsTable);
+  const map: Record<string, string> = {};
+  for (const r of rows) map[r.key] = r.value;
+  res.json({
+    whatsappNumber: map["whatsappNumber"] ?? "",
+    contactEmail: map["contactEmail"] ?? "",
+    contactAddress: map["contactAddress"] ?? "",
+    contactPhone: map["contactPhone"] ?? "",
+    privacyPolicy: map["privacyPolicy"] ?? "",
+    shippingPolicy: map["shippingPolicy"] ?? "",
+    returnPolicy: map["returnPolicy"] ?? "",
+    facebookUrl: map["facebookUrl"] ?? "",
+    instagramUrl: map["instagramUrl"] ?? "",
+    twitterUrl: map["twitterUrl"] ?? "",
+    youtubeUrl: map["youtubeUrl"] ?? "",
+    paymentMethods: map["paymentMethods"] ?? "",
+  });
+});
+
+router.get("/hero-store", async (_req, res): Promise<void> => {
+  const now = new Date();
+  const [shop] = await db
+    .select()
+    .from(shopsTable)
+    .where(and(eq(shopsTable.status, "active"), eq(shopsTable.heroFeatured, true)))
+    .orderBy(shopsTable.id);
+  if (!shop || (shop.subscriptionExpiryDate && new Date(shop.subscriptionExpiryDate) < now)) {
+    res.json(null);
+    return;
+  }
+  res.json({
+    id: shop.id,
+    shopName: shop.shopName,
+    slug: shop.slug,
+    bannerUrl: shop.bannerUrl,
+    logoUrl: shop.logoUrl,
+    tagline: shop.tagline,
+  });
+});
+router.get("/featured-stores", async (_req, res): Promise<void> => {
+  const now = new Date();
+  const shops = await db
+    .select()
+    .from(shopsTable)
+    .where(and(eq(shopsTable.status, "active"), eq(shopsTable.showOnLanding, true)));
+  // Filter out expired, return only public-safe fields
+  const featured = shops
+    .filter((s) => !s.subscriptionExpiryDate || new Date(s.subscriptionExpiryDate) >= now)
+    .map((s) => ({
+      id: s.id,
+      shopName: s.shopName,
+      slug: s.slug,
+      bannerUrl: s.bannerUrl,
+      logoUrl: s.logoUrl,
+      tagline: s.tagline,
+    }));
+  res.json(featured);
+});
 router.get("/stores/:slug", async (req, res): Promise<void> => {
   const params = GetPublicStoreParams.safeParse(req.params);
   if (!params.success) {
@@ -28,6 +93,11 @@ router.get("/stores/:slug", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Store not found" });
     return;
   }
+  // Block access if subscription has expired
+  if (shop.subscriptionExpiryDate && new Date(shop.subscriptionExpiryDate) < new Date()) {
+    res.status(404).json({ error: "Store subscription expired" });
+    return;
+  }
 
   res.json(
     GetPublicStoreResponse.parse({
@@ -42,6 +112,15 @@ router.get("/stores/:slug", async (req, res): Promise<void> => {
       footerText: shop.footerText,
       footerAddress: shop.footerAddress,
       footerPhone: shop.footerPhone,
+      footerEmail: shop.footerEmail,
+      privacyPolicy: shop.privacyPolicy,
+      shippingPolicy: shop.shippingPolicy,
+      returnPolicy: shop.returnPolicy,
+      facebookUrl: shop.facebookUrl,
+      instagramUrl: shop.instagramUrl,
+      twitterUrl: shop.twitterUrl,
+      youtubeUrl: shop.youtubeUrl,
+      paymentMethods: shop.paymentMethods,
     }),
   );
 });
@@ -60,6 +139,11 @@ router.get("/stores/:slug/products", async (req, res): Promise<void> => {
 
   if (!shop || shop.status !== "active") {
     res.status(404).json({ error: "Store not found" });
+    return;
+  }
+  // Block access if subscription has expired
+  if (shop.subscriptionExpiryDate && new Date(shop.subscriptionExpiryDate) < new Date()) {
+    res.status(404).json({ error: "Store subscription expired" });
     return;
   }
 
@@ -96,6 +180,11 @@ router.post("/stores/:slug/orders", async (req, res): Promise<void> => {
 
   if (!shop || shop.status !== "active") {
     res.status(404).json({ error: "Store not found" });
+    return;
+  }
+  // Block access if subscription has expired
+  if (shop.subscriptionExpiryDate && new Date(shop.subscriptionExpiryDate) < new Date()) {
+    res.status(404).json({ error: "Store subscription expired" });
     return;
   }
 

@@ -25,6 +25,40 @@ export interface Shop {
   bannerUrl?: string | null;
   /** @nullable */
   brandColor?: string | null;
+  /** @nullable */
+  footerText?: string | null;
+  /** @nullable */
+  footerAddress?: string | null;
+  /** @nullable */
+  footerPhone?: string | null;
+  /** @nullable */
+  footerEmail?: string | null;
+  /** @nullable */
+  privacyPolicy?: string | null;
+  /** @nullable */
+  shippingPolicy?: string | null;
+  /** @nullable */
+  returnPolicy?: string | null;
+  /** @nullable */
+  facebookUrl?: string | null;
+  /** @nullable */
+  instagramUrl?: string | null;
+  /** @nullable */
+  twitterUrl?: string | null;
+  /** @nullable */
+  youtubeUrl?: string | null;
+  /** @nullable */
+  paymentMethods?: string | null;
+  /** @nullable */
+  subscriptionStartDate?: string | null;
+  /** @nullable */
+  subscriptionExpiryDate?: string | null;
+  /** @nullable */
+  showOnLanding?: boolean | null;
+  /** @nullable */
+  heroFeatured?: boolean | null;
+  /** @nullable */
+  permanentToken?: string | null;
   createdAt: string;
 }
 
@@ -37,8 +71,17 @@ export interface ShopInput {
 }
 
 export interface ShopUpdate {
+  shopName?: string;
+  ownerName?: string;
+  whatsapp?: string;
   plan?: string;
   status?: string;
+  /** @nullable */
+  subscriptionStartDate?: string | null;
+  /** @nullable */
+  subscriptionExpiryDate?: string | null;
+  showOnLanding?: boolean;
+  heroFeatured?: boolean;
 }
 
 export interface ShopSettings {
@@ -51,6 +94,15 @@ export interface ShopSettings {
   footerText?: string;
   footerAddress?: string;
   footerPhone?: string;
+  footerEmail?: string;
+  privacyPolicy?: string;
+  shippingPolicy?: string;
+  returnPolicy?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
+  twitterUrl?: string;
+  youtubeUrl?: string;
+  paymentMethods?: string;
 }
 
 export interface Plan {
@@ -58,12 +110,16 @@ export interface Plan {
   name: string;
   price: number;
   /** @nullable */
+  comparePrice?: number | null;
+  /** @nullable */
   productLimit: number | null;
   features: string;
 }
 
 export interface PlanUpdate {
   price?: number;
+  /** @nullable */
+  comparePrice?: number | null;
   /** @nullable */
   productLimit?: number | null;
   features?: string;
@@ -73,6 +129,12 @@ export interface LoginToken {
   token: string;
   shopId: number;
   magicLink: string;
+}
+
+export interface PermanentTokenResponse {
+  token: string;
+  shopId: number;
+  permanentLink: string;
 }
 
 export interface LoginInput {
@@ -99,7 +161,11 @@ export interface Product {
   /** @nullable */
   category?: string | null;
   /** @nullable */
+  description?: string | null;
+  /** @nullable */
   imageUrl?: string | null;
+  /** @nullable */
+  variants?: string | null;
   createdAt: string;
 }
 
@@ -108,7 +174,9 @@ export interface ProductInput {
   price: number;
   stock?: number;
   category?: string;
+  description?: string;
   imageUrl?: string;
+  variants?: string;
 }
 
 export interface ProductUpdate {
@@ -116,7 +184,9 @@ export interface ProductUpdate {
   price?: number;
   stock?: number;
   category?: string;
+  description?: string;
   imageUrl?: string;
+  variants?: string;
 }
 
 export interface Order {
@@ -148,6 +218,47 @@ export interface OrderUpdate {
   status?: string;
 }
 
+export interface PlatformSettings {
+  whatsappNumber: string;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  contactAddress?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  privacyPolicy?: string | null;
+  /** @nullable */
+  shippingPolicy?: string | null;
+  /** @nullable */
+  returnPolicy?: string | null;
+  /** @nullable */
+  facebookUrl?: string | null;
+  /** @nullable */
+  instagramUrl?: string | null;
+  /** @nullable */
+  twitterUrl?: string | null;
+  /** @nullable */
+  youtubeUrl?: string | null;
+  /** @nullable */
+  paymentMethods?: string | null;
+}
+
+export interface PlatformSettingsUpdate {
+  whatsappNumber?: string;
+  contactEmail?: string;
+  contactAddress?: string;
+  contactPhone?: string;
+  privacyPolicy?: string;
+  shippingPolicy?: string;
+  returnPolicy?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
+  twitterUrl?: string;
+  youtubeUrl?: string;
+  paymentMethods?: string;
+}
+
 export interface AdminStats {
   totalShops: number;
   activeShops: number;
@@ -165,6 +276,8 @@ export interface ShopStats {
   revenueThisMonth: number;
   lowStockCount: number;
   pendingOrders?: number;
+  /** @nullable */
+  productLimit?: number | null;
 }
 
 export interface PublicStore {
@@ -186,5 +299,23 @@ export interface PublicStore {
   footerAddress?: string | null;
   /** @nullable */
   footerPhone?: string | null;
+  /** @nullable */
+  footerEmail?: string | null;
+  /** @nullable */
+  privacyPolicy?: string | null;
+  /** @nullable */
+  shippingPolicy?: string | null;
+  /** @nullable */
+  returnPolicy?: string | null;
+  /** @nullable */
+  facebookUrl?: string | null;
+  /** @nullable */
+  instagramUrl?: string | null;
+  /** @nullable */
+  twitterUrl?: string | null;
+  /** @nullable */
+  youtubeUrl?: string | null;
+  /** @nullable */
+  paymentMethods?: string | null;
 }
 

@@ -10,7 +10,9 @@ export const productsTable = pgTable("products", {
   price: integer("price").notNull().default(0),
   stock: integer("stock").notNull().default(0),
   category: text("category"),
+  description: text("description"),
   imageUrl: text("image_url"),
+  variants: text("variants"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

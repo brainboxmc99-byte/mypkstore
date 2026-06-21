@@ -15,6 +15,8 @@ export interface Product {
   /** @nullable */
   category?: string | null;
   /** @nullable */
+  description?: string | null;
+  /** @nullable */
   imageUrl?: string | null;
   createdAt: string;
 }

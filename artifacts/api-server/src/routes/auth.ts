@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gt } from "drizzle-orm";
-import { db, loginTokensTable, shopsTable } from "@workspace/db";
+import { db, loginTokensTable, shopsTable, platformSettingsTable } from "@workspace/db";
 import {
   LoginWithTokenBody,
   LoginWithTokenResponse,
@@ -40,23 +40,29 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       ),
     );
 
-  if (!record) {
-    res.status(401).json({ error: "Invalid or expired token" });
-    return;
+  let shop: typeof shopsTable.$inferSelect | undefined;
+
+  if (record) {
+    await db
+      .update(loginTokensTable)
+      .set({ used: true })
+      .where(eq(loginTokensTable.id, record.id));
+
+    const [s] = await db
+      .select()
+      .from(shopsTable)
+      .where(eq(shopsTable.id, record.shopId));
+    shop = s;
+  } else {
+    const [s] = await db
+      .select()
+      .from(shopsTable)
+      .where(eq(shopsTable.permanentToken, token));
+    shop = s;
   }
 
-  await db
-    .update(loginTokensTable)
-    .set({ used: true })
-    .where(eq(loginTokensTable.id, record.id));
-
-  const [shop] = await db
-    .select()
-    .from(shopsTable)
-    .where(eq(shopsTable.id, record.shopId));
-
   if (!shop) {
-    res.status(401).json({ error: "Shop not found" });
+    res.status(401).json({ error: "Invalid or expired token" });
     return;
   }
 
@@ -68,16 +74,24 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   req.session.role = "shopOwner";
   req.session.shopId = shop.id;
 
-  res.json(
-    LoginWithTokenResponse.parse({
-      role: "shopOwner",
-      shopId: shop.id,
-      shop: {
-        ...shop,
-        createdAt: shop.createdAt.toISOString(),
-      },
-    }),
-  );
+  req.session.save((err) => {
+    if (err) {
+      res.status(500).json({ error: "Session save failed" });
+      return;
+    }
+    res.json(
+      LoginWithTokenResponse.parse({
+        role: "shopOwner",
+        shopId: shop.id,
+        shop: {
+          ...shop,
+          createdAt: shop.createdAt.toISOString(),
+          subscriptionStartDate: shop.subscriptionStartDate?.toISOString() ?? null,
+          subscriptionExpiryDate: shop.subscriptionExpiryDate?.toISOString() ?? null,
+        },
+      }),
+    );
+  });
 });
 
 router.post("/auth/admin", async (req, res): Promise<void> => {
@@ -87,14 +101,24 @@ router.post("/auth/admin", async (req, res): Promise<void> => {
     return;
   }
 
-  if (parsed.data.password !== ADMIN_PASSWORD) {
+  const settingRows = await db.select().from(platformSettingsTable).where(eq(platformSettingsTable.key, "adminPassword"));
+  const storedPassword = settingRows[0]?.value;
+  const effectivePassword = storedPassword || ADMIN_PASSWORD;
+
+  if (parsed.data.password !== effectivePassword) {
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
 
   req.session.role = "admin";
 
-  res.json(AdminLoginResponse.parse({ role: "admin", shopId: null }));
+  req.session.save((err) => {
+    if (err) {
+      res.status(500).json({ error: "Session save failed" });
+      return;
+    }
+    res.json(AdminLoginResponse.parse({ role: "admin", shopId: null }));
+  });
 });
 
 router.get("/auth/me", async (req, res): Promise<void> => {
@@ -139,6 +163,8 @@ router.get("/auth/me", async (req, res): Promise<void> => {
       shop: {
         ...shop,
         createdAt: shop.createdAt.toISOString(),
+        subscriptionStartDate: shop.subscriptionStartDate?.toISOString() ?? null,
+        subscriptionExpiryDate: shop.subscriptionExpiryDate?.toISOString() ?? null,
       },
     }),
   );
